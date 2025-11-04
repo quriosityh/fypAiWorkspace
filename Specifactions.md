@@ -32,7 +32,7 @@ Features:
     ✓ Optimistic booking (no payment, owner confirms)
     ✓ Real-time messaging (Socket.io or SSE fallback)
     ✓ Two-way reviews (renters + owners)
-    ✓ User profiles
+    ✓ User profiles 
     
   Payment Model:
     - In-person cash payment when renting

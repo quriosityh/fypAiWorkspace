@@ -1,4 +1,18 @@
-Perfect! Here’s a **visual explanation of the Git branching workflow** for `main`, `develop`, and `feature/*` branches in a monorepo like your StuFlux project:
+# Development Guide
+
+## Database Access with Drizzle ORM
+
+We use Drizzle ORM for database operations. See [[lessons/drizzle-setup]] for detailed setup and usage guide.
+
+Key points:
+- Schema is defined in `apps/api/src/db/schema.ts`
+- Use Drizzle's type-safe query builders instead of raw SQL
+- Run migrations with `pnpm db:generate` and `pnpm db:push`
+- Use the Drizzle Studio UI with `pnpm db:studio` for data exploration
+
+## Git Workflow
+
+Here's a **visual explanation of the Git branching workflow** for `main`, `develop`, and `feature/*` branches in a monorepo like your StuFlux project:
 
 ```
           ┌─────────────────────────┐

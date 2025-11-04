@@ -329,9 +329,6 @@ COST: $5-10/month (Railway)
 
 ---
 
-
----
-
 ## ✅ FINAL HYBRID SPECIFICATION
 
 ### **Technology Choices - LOCKED**

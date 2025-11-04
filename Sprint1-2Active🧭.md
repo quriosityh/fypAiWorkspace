@@ -15,10 +15,13 @@
 - **Express API:** All writes, complex business logic, authentication
 - **Reasoning:** 80% traffic is reads → optimize for speed and cost
 
-### ✅ **Migration Strategy: Raw SQL**
-- Use simple SQL files + custom migration runner
-- Faster setup than node-pg-migrate
-- More readable for team learning
+### ✅ **Migration Strategy: Drizzle ORM**
+- All database work (API, Next.js Server Components) uses Drizzle ORM, not raw SQL.
+- Migrations and schema changes are managed by Drizzle (`drizzle-kit`).
+- Remove references to raw SQL files and migration runner.
+- Folder structure includes `db/schema.ts`, `db/client.ts`, and Drizzle config.
+- All CRUD and queries use Drizzle’s type-safe API.
+- Team onboarding and docs updated for Drizzle usage.
 
 ### ✅ **Clerk Authentication: Fixed Implementation**
 - **Backend**: Use `@clerk/backend` with `createClerkClient` and `verifyToken`
@@ -133,12 +136,9 @@ stuflux/
 │       │   │   └── uploads.ts
 │       │   └── utils/
 │       │       └── cloudinary.ts
-│       ├── migrations/ ← CHANGED to raw SQL
-│       │   ├── 001_create_users.sql
-│       │   ├── 002_create_categories.sql
-│       │   ├── 003_create_listings.sql
-│       │   ├── 004_create_listing_images.sql
-│       │   └── run.ts (migration runner)
+│       ├── db/
+│       │   ├── client.ts (Drizzle client)
+│       │   └── schema.ts (Drizzle schema)
 │       ├── seeds/
 │       │   └── seed.ts ← UPDATED (no faker)
 │       ├── tests/
@@ -162,42 +162,58 @@ stuflux/
 
 ---
 
-## 🗄️ DATABASE SCHEMA - COMPLETE
+## 🗄️ DATABASE SCHEMA (Drizzle ORM)
 
 ### **Core Tables**
 
-#### `users`
-```sql
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  clerk_id TEXT UNIQUE NOT NULL,
-  email TEXT,
-  name TEXT,
-  avatar_url TEXT,
-  city TEXT,
-  phone TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
+```typescript
+// db/schema.ts
+import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, serial } from 'drizzle-orm/pg-core';
 
-CREATE INDEX idx_users_clerk_id ON users(clerk_id);
-```
+export const users = pgTable('users', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  clerk_id: text('clerk_id').unique().notNull(),
+  email: text('email'),
+  name: text('name'),
+  avatar_url: text('avatar_url'),
+  city: text('city'),
+  phone: text('phone'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow()
+});
 
-#### `categories`
-```sql
-CREATE TABLE categories (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  description TEXT,
-  icon TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
+export const categories = pgTable('categories', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').unique().notNull(),
+  description: text('description'),
+  icon: text('icon'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
 
-INSERT INTO categories (name, slug, description) VALUES
-  ('Electronics', 'electronics', 'Cameras, laptops, gaming equipment'),
-  ('Tools & Equipment', 'tools', 'Power tools, construction equipment'),
-  ('Party & Events', 'party', 'Tents, speakers, decorations'),
+export const listings = pgTable('listings', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  owner_id: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  category_id: integer('category_id').notNull().references(() => categories.id),
+  daily_rate: integer('daily_rate').notNull(),
+  city: text('city').notNull(),
+  address: text('address'),
+  latitude: text('latitude'),
+  longitude: text('longitude'),
+  status: text('status', { enum: ['draft', 'active', 'inactive', 'archived'] }).default('draft'),
+  specs: jsonb('specs').default({}),
+  min_rental_days: integer('min_rental_days').default(1),
+  max_rental_days: integer('max_rental_days').default(30),
+  delivery_available: boolean('delivery_available').default(false),
+  delivery_fee: integer('delivery_fee').default(0),
+  security_deposit: integer('security_deposit').default(0),
+  booking_count: integer('booking_count').default(0),
+  view_count: integer('view_count').default(0),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow()
+});
   ('Sports & Outdoor', 'sports', 'Camping gear, bicycles, sports equipment'),
   ('Home & Furniture', 'home', 'Furniture, appliances, home decor'),
   ('Vehicles', 'vehicles', 'Cars, motorcycles, bicycles');
@@ -750,10 +766,10 @@ EXPECTED_NODE_VERSION=20
 #### **Day 1 — Monorepo Setup (8h)**
 
 **Morning (4h):**
-- [ ] GitHub repo setup with branch protection
-- [ ] `pnpm-workspace.yaml` configuration
-- [ ] Root `package.json` with workspace scripts
-- [ ] Directory structure creation
+- [x] GitHub repo setup with branch protection
+- [x] `pnpm-workspace.yaml` configuration
+- [x] Root `package.json` with workspace scripts
+- [x] Directory structure creation
 - **Commands:**
   ```bash
   mkdir stuflux && cd stuflux
@@ -769,8 +785,8 @@ EXPECTED_NODE_VERSION=20
 
 **Afternoon (4h):**
 - [ ] Initial README.md with setup instructions
-- [ ] Git repository initialization and first commit
-- [ ] Verify workspace structure works
+- [x] Git repository initialization and first commit
+- [x] Verify workspace structure works
 - **Dev Allocation:** Dev A + Dev B together
 - **Blockers:** Git access, Node/pnpm installation
 - **Definition of Done:** Both devs can clone repo, run `pnpm install`, and see workspace installed
@@ -778,9 +794,9 @@ EXPECTED_NODE_VERSION=20
 #### **Day 2 — Next.js Setup (8h)**
 
 **Morning (4h):**
-- [ ] Next.js 14 app creation in `apps/web`
-- [ ] TypeScript strict configuration (use defaults)
-- [ ] Tailwind CSS + PostCSS setup
+- [x] Next.js 14 app creation in `apps/web`
+- [x] TypeScript strict configuration (use defaults)
+- [x] Tailwind CSS + PostCSS setup
 - **Commands:**
   ```bash
   cd apps/web
@@ -788,9 +804,9 @@ EXPECTED_NODE_VERSION=20
   ```
 
 **Afternoon (4h):**
-- [ ] Basic layout components (Header, Footer)
-- [ ] ESLint + Prettier configuration
-- [ ] Environment setup (.env.example)
+- [x] Basic layout components (Header, Footer)
+- [x] ESLint + Prettier configuration
+- [x] Environment setup (.env.example)
 - **Dev Allocation:** Dev A (Frontend lead), Dev B (support)
 - **Definition of Done:** `pnpm -F web dev` runs on localhost:3000
 

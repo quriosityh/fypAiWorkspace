@@ -1,3 +1,7 @@
+---
+share_link: https://share.note.sx/83zzi3hk#newFZsWhLlYK7q9D4wSBxgU070M31XEAHljth8e1gm8
+share_updated: 2025-11-01T18:59:40+05:00
+---
 # 📅 Day 1 & 2 Implementation Guide - StuFlux Setup (CORRECTED)
 
 ## 🎯 Overview

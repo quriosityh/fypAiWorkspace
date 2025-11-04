@@ -28,6 +28,7 @@
 ## 💻 Development Docs
 
 ### [[Dev Guide]]
+### [[lessons/drizzle-setup|Database & ORM Guide]]
 ### Database Schema
 ### API Endpoints
 ### Folder Structure
