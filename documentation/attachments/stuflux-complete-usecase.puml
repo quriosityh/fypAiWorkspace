@@ -1,0 +1,80 @@
+@startuml
+!theme vibrant
+left to right direction
+
+' Actors
+actor Guest
+actor "Authenticated User" as AuthUser
+actor Renter
+actor Owner
+
+' System Boundary
+rectangle "StuFlux Rental Platform" {
+  
+  ' Authentication Use Cases
+  usecase "Register" as UC_Register
+  usecase "Login" as UC_Login
+  
+  ' Browse & Search Use Cases
+  usecase "Browse Listings" as UC_Browse
+  usecase "Search Listings" as UC_Search
+  usecase "View Item Details" as UC_View
+  
+  ' Listing Management Use Cases
+  usecase "Create Listing" as UC_CreateListing
+  usecase "Manage Listing" as UC_ManageListing
+  
+  ' Booking Use Cases
+  usecase "Request Booking" as UC_RequestBooking
+  usecase "Check Availability" as UC_CheckAvail
+  usecase "Confirm/Reject Booking" as UC_ConfirmReject
+  usecase "Update Calendar" as UC_UpdateCalendar
+  usecase "Complete Booking" as UC_CompleteBooking
+  
+  ' Communication & Review Use Cases
+  usecase "Send Message" as UC_SendMessage
+  usecase "Write Review" as UC_WriteReview
+  usecase "Manage Profile" as UC_ManageProfile
+}
+
+' ===== Guest Associations =====
+Guest --> UC_Browse : view
+Guest --> UC_Search : search
+Guest --> UC_View : view details
+Guest --> UC_Register : sign up
+Guest --> UC_Login : sign in
+
+' ===== Authenticated User Associations =====
+AuthUser --> UC_Browse : browse
+AuthUser --> UC_Search : search
+AuthUser --> UC_View : view details
+AuthUser --> UC_Login : authenticate
+AuthUser --> UC_ManageProfile : update profile
+
+' ===== Renter Associations =====
+Renter --> UC_RequestBooking : book item
+Renter --> UC_CompleteBooking : finalize
+Renter --> UC_SendMessage : chat
+Renter --> UC_WriteReview : review owner
+
+' ===== Owner Associations =====
+Owner --> UC_CreateListing : add item
+Owner --> UC_ManageListing : edit/delete
+Owner --> UC_ConfirmReject : approve/deny
+Owner --> UC_SendMessage : chat
+Owner --> UC_WriteReview : review renter
+
+' ===== Actor Generalizations =====
+Renter --|> AuthUser : is a
+Owner --|> AuthUser : is a
+
+' ===== Include Relationships =====
+UC_RequestBooking ..> UC_CheckAvail : <<include>>
+UC_ConfirmReject ..> UC_UpdateCalendar : <<include>>
+
+' ===== Extend Relationships =====
+UC_WriteReview ..> UC_CompleteBooking : <<extend>>
+UC_SendMessage ..> UC_RequestBooking : <<extend>>
+UC_SendMessage ..> UC_ConfirmReject : <<extend>>
+
+@enduml

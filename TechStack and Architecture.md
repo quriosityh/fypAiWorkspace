@@ -11,7 +11,7 @@ Yes, **hybrid is the RIGHT choice** for your rental platform. Let me validate wh
 ```
 TRAFFIC PATTERN:
 ├── 80% READ operations (browsing listings, searching)
-│   → These should be FAST and FREE
+│   → These should be FAST and **FREE**
 │   → Next.js Server Components (cached, edge-delivered)
 │
 └── 20% WRITE operations (bookings, payments, messages)

@@ -1,0 +1,118 @@
+For a project with Neon DB, Clerk Auth, Cloudinary, and other services, you should organize your environment variables across multiple `.env` files based on the environment. Here's the recommended structure:
+
+## Environment File Structure
+
+```
+.env.local          # Local overrides (highest priority, gitignored)
+.env.development    # Development-specific settings
+.env.test           # Test-specific settings  
+.env.production     # Production settings (for build-time)
+.env                # Default/fallback values
+```
+
+## Recommended Configuration
+
+### 1. `.env` (Base configuration)
+```env
+# General app settings
+NODE_ENV=development
+APP_URL=http://localhost:3000
+
+# Clerk Auth (development defaults)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+# Neon DB (development database)
+DATABASE_URL=postgresql://user:pass@ep-cool-base-123.us-east-2.aws.neon.tech/dbname?sslmode=require
+
+# Cloudinary (development)
+CLOUDINARY_CLOUD_NAME=your-dev-cloud
+CLOUDINARY_API_KEY=123456789
+CLOUDINARY_API_SECRET=your-dev-secret
+
+# Other services...
+```
+
+### 2. `.env.development` (Development overrides)
+```env
+# Override any development-specific values
+DATABASE_URL=postgresql://user:pass@ep-dev-db-456.us-east-2.aws.neon.tech/devdb?sslmode=require
+CLOUDINARY_CLOUD_NAME=dev-cloud
+```
+
+### 3. `.env.test` (Test environment)
+```env
+NODE_ENV=test
+APP_URL=http://localhost:3001
+
+# Test-specific Clerk keys
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_special_test_key...
+CLERK_SECRET_KEY=sk_test_special_test_secret...
+
+# Test database (separate from development)
+DATABASE_URL=postgresql://user:pass@ep-test-db-789.us-east-2.aws.neon.tech/testdb?sslmode=require
+
+# Test Cloudinary (or mock service)
+CLOUDINARY_CLOUD_NAME=test-cloud
+```
+
+### 4. `.env.production` (Production - for build-time)
+```env
+NODE_ENV=production
+APP_URL=https://yourapp.com
+
+# Production Clerk keys
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+
+# Production database
+DATABASE_URL=postgresql://user:pass@ep-prod-db-001.us-east-2.aws.neon.tech/proddb?sslmode=require
+
+# Production Cloudinary
+CLOUDINARY_CLOUD_NAME=prod-cloud
+CLOUDINARY_API_KEY=prod-key
+CLOUDINARY_API_SECRET=prod-secret
+```
+
+### 5. `.env.local` (Local overrides - gitignored)
+```env
+# Personal local overrides that shouldn't be committed
+DATABASE_URL=postgresql://user:pass@ep-local-db-123.us-east-2.aws.neon.tech/localdb?sslmode=require
+```
+
+## Key Principles
+
+1. **Security**: Never commit real secrets to git
+2. **Isolation**: Each environment should have separate databases and keys
+3. **Priority**: `.env.local` > `.env.{environment}` > `.env`
+4. **Testing**: Use dedicated test keys and databases
+
+## For Deployment
+
+### Vercel/Netlify:
+- Set environment variables in the platform's dashboard
+- Use `NEXT_PUBLIC_` prefix for client-side variables
+
+### Docker:
+```dockerfile
+# Use environment-specific .env files
+COPY .env.production .env
+```
+
+## Example with Next.js
+
+```javascript
+// lib/env.js
+export const env = {
+  databaseUrl: process.env.DATABASE_URL,
+  clerkPublishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  clerkSecretKey: process.env.CLERK_SECRET_KEY,
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiSecret: process.env.CLOUDINARY_API_SECRET,
+  },
+} as const;
+```
+
+This structure ensures proper separation of concerns and security across different environments.

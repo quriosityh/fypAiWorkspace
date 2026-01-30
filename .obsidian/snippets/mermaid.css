@@ -1,0 +1,5 @@
+.mermaid svg {
+  transform: scale(1);
+  transform-origin: top left;
+}
+

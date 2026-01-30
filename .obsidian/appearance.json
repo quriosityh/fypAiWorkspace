@@ -1,3 +1,7 @@
 {
-  "cssTheme": "AnuPpuccin"
+  "cssTheme": "",
+  "theme": "moonstone",
+  "enabledCssSnippets": [
+    "mermaid"
+  ]
 }

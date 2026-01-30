@@ -139,6 +139,7 @@ stuflux/
 │       ├── db/
 │       │   ├── client.ts (Drizzle client)
 │       │   └── schema.ts (Drizzle schema)
+			└── migrations/   # Database migrations
 │       ├── seeds/
 │       │   └── seed.ts ← UPDATED (no faker)
 │       ├── tests/

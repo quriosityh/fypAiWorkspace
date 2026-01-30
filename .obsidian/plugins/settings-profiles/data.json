@@ -1,0 +1,16 @@
+{
+  "activeProfile": {},
+  "profileUpdate": true,
+  "profileUpdateDelay": 800,
+  "uiUpdate": true,
+  "uiUpdateInterval": 1000,
+  "devices": {
+    "1808225568a4e13266133fd05dedce6c0d6979da6304b8574a01198289c6fd43": "/home/apic/.var/app/md.obsidian.Obsidian/data/obsidianplugins/Profiles"
+  },
+  "statusbarInteraction": {
+    "click": "auto",
+    "ctrl_click": "none",
+    "shift_click": "none",
+    "alt_click": "none"
+  }
+}

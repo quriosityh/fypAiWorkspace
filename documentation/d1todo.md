@@ -1,0 +1,163 @@
+# [Affiliated College Name]
+
+**University of the Punjab, Lahore**
+
+## Final Year Project – Deliverable 2
+
+### Requirement Specification & Design Document
+
+#### Template / Guidelines
+
+**Note:** This template is intended as a general guide. Students may add or skip sections depending on the nature and needs of their project. Ensure that the document clearly reflects your system's requirements and design approach.
+
+---
+
+# [Final Year Project Title]
+
+## Requirement Specification & Design
+
+### Contents
+
+1. Analysis Phase Use Case Diagram (Page 3)
+2. Domain Model (Page 4)
+3. Sequence Diagrams for Each High-Level Use Case (Page 5)
+4. Data Model Using Entity-Relationship Diagram (ERD) for Database Design (Page 6)
+5. Design Class Diagram Using Design Patterns (Page 7)
+
+---
+
+BSCSF20## | [Affiliated College Name]  
+Page 2 of 7
+
+---
+
+# [Final Year Project Title]
+
+## Requirement Specification & Design
+
+## 1. Analysis Phase Use Case Diagram
+
+An analysis-level use case diagram is a more detailed version of the high-level use case diagram. It explains how each high-level use case will be carried out in the system by breaking it down into smaller, more specific actions or interactions. This helps in understanding the internal structure of each high-level functionality.
+
+Two special relationships are commonly used in this diagram to represent connections between use cases:
+
+- **Include:** Used when a common sub-function is shared by multiple use cases.
+- **Extend:** Used when a use case adds optional behavior to another use case.
+
+This diagram plays a key role in requirement analysis and helps in designing a system that meets all functional needs clearly.
+
+### Example: E-commerce Site – Use Case Diagram featuring «include» and «extend» Relationships
+
+BSCSF20## | [Affiliated College Name]  
+Page 3 of 7
+
+---
+
+# [Final Year Project Title]
+
+## Requirement Specification & Design
+
+## 2. Domain Model
+
+The domain model represents the system from a conceptual perspective, showing the key entities (or conceptual classes) and their relationships. These classes are typically derived from the nouns found in high-level use cases.
+
+The domain model includes:
+
+- **Conceptual Classes** with meaningful names and relevant attributes
+- **Associations** that depict relationships between the classes
+
+This model helps in understanding the system's structure before moving into detailed design. It serves as a bridge between requirement analysis and object-oriented design.
+
+### Example: Domain Model for Teaching & Classroom Management System
+
+BSCSF20## | [Affiliated College Name]  
+Page 4 of 7
+
+---
+
+# [Final Year Project Title]
+
+## Requirement Specification & Design
+
+## 3. Sequence Diagrams for Each High-Level Use Case
+
+A Sequence diagram illustrates the sequence of interactions between objects (or components) in a system. It focuses on the order of method invocations and the flow of messages between objects, showing the dynamic behaviour of a system over time.
+
+These diagrams are particularly useful for detailing how different objects collaborate to fulfill a specific use case in a system, especially when you need to capture the order in which operations or messages occur.
+
+### Key points:
+
+- A Sequence diagram represents the interactions between objects or components.
+- The objects involved are displayed as vertical lines, while the interactions (method calls, messages) are shown as horizontal arrows between these lines.
+- The timeline is depicted as time progresses vertically.
+- Sequence diagrams are created by identifying the high-level use cases and then determining the sequence of operations between identified classes or objects in those use cases.
+- These diagrams are critical for understanding how objects communicate and interact in response to specific events or actions, especially in real-time systems.
+
+### Example Process for Creation:
+
+1. Identify the high-level use case.
+2. Determine the key objects or components involved.
+3. Establish the interactions between these objects in terms of method invocations or messages.
+4. Depict the order of these interactions using a timeline.
+
+### Example: Sequence Diagram for "Return Book" Use Case
+
+BSCSF20## | [Affiliated College Name]  
+Page 5 of 7
+
+---
+
+# [Final Year Project Title]
+
+## Requirement Specification & Design
+
+## 4. Data Model using Entity Relationship Diagram (ERD) – Database Design
+
+The Data Model is a part of the implementation model that describes how data will be stored, organized, and related within the system. It helps in understanding the structure of the database before actual implementation.
+
+The Entity Relationship Diagram (ERD) visually represents the data and its relationships using standard symbols and notations. This diagram is essential for designing the logical structure of the database.
+
+The key elements of an ERD include:
+
+- **Entities:** Represent real-world objects or concepts (e.g., Student, Book, Order) stored in tables.
+- **Relationships:** Represent how entities are related to each other (e.g., A Student borrows a Book).
+- **Cardinality:** Indicates the number of instances in one entity that can be associated with instances in another entity (e.g., One-to-Many, Many-to-Many).
+- **Modality (or Participation):** Indicates whether the relationship is mandatory or optional for the participating entities.
+
+A well-designed ERD ensures data integrity and supports efficient data retrieval and storage. You can use tools like draw.io, Lucidchart, or MySQL Workbench to draw the ERD.
+
+### Example: Entity Relationship Diagram for a Library Management System
+
+BSCSF20## | [Affiliated College Name]  
+Page 6 of 7
+
+---
+
+# [Final Year Project Title]
+
+## Requirement Specification & Design
+
+## 5. Design Class Diagram (Using Design Patterns)
+
+The Design Class Diagram is developed using case model, domain model, and sequence diagrams. It provides a detailed view of the system's structure by showing how classes interact and relate at a design level.
+
+The key elements of a Design Class Diagram include:
+
+- Classes, their attributes, and associations
+- Interfaces with their defined operations
+- Methods implemented by classes
+- Navigability between classes (which class knows about the other)
+- Dependencies among classes
+
+It is essential to use appropriate class relationships, such as:
+
+- **Inheritance** (generalization)
+- **Containment** (composition and aggregation)
+- **Dependencies** (use or collaboration relationships)
+
+Where relevant, design patterns like Singleton, Factory, Observer, etc., can be applied to make the design robust and reusable.
+
+### Example: Design Class Diagram of a Banking System
+
+BSCSF20## | [Affiliated College Name]  
+Page 7 of 7

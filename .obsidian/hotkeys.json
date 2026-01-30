@@ -273,5 +273,14 @@
       ],
       "key": "/"
     }
+  ],
+  "share-note:copy-link": [
+    {
+      "modifiers": [
+        "Alt",
+        "Mod"
+      ],
+      "key": "S"
+    }
   ]
 }

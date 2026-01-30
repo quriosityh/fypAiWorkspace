@@ -1,1 +1,6 @@
-{}
+{
+  "newFileLocation": "current",
+  "attachmentFolderPath": "./attachments",
+  "trashOption": "local",
+  "alwaysUpdateLinks": true
+}

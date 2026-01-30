@@ -39,12 +39,15 @@ touch src/db.ts
 
 #### ~~Updated Express Index (src/index.ts) - Enhanced from Day 2~~
 ```typescript
-import express from 'express';
+import dotenv from 'dotenv';
+// Load environment variables as early as possible
+dotenv.config();
+
+import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
-import dotenv from 'dotenv';
 
 // Import routes
 import healthRoutes from './routes/health.js';
@@ -55,10 +58,7 @@ import uploadsRoutes from './routes/uploads.js';
 import { errorHandler } from './middleware/errors.js';
 import { requestLogger } from './middleware/logger.js';
 
-// Load environment variables
-dotenv.config();
-																		
-const app : Application = express();
+const app: Application = express();
 const PORT = process.env.PORT || 4000;
 
 // Trust proxy for Railway/Heroku deployment
@@ -124,11 +124,15 @@ app.get('/', (req, res) => {
 });
 
 // 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ 
-    error: 'Route not found',
-    path: req.originalUrl,
-    method: req.method
+app.use((req, res) => {
+  res.status(404).json({
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'Route not found',
+      timestamp: new Date().toISOString(),
+      path: req.originalUrl,
+      method: req.method
+    }
   });
 });
 
@@ -156,91 +160,252 @@ export default app;
 #### ~~Error Handling Middleware (src/middleware/errors.ts)~~
 ```typescript
 import { Request, Response, NextFunction } from 'express';
-import { ZodError } from 'zod';
+import { ZodError, ZodIssue } from 'zod';
 
+// Enhanced error types for better debugging
 export interface ApiError extends Error {
   statusCode?: number;
   code?: string;
+  context?: Record<string, any>;
+  userMessage?: string;
+}
+
+export interface ErrorContext {
+  module?: string | undefined;
+  operation?: string | undefined;
+  userId?: string | undefined;
+  resourceId?: string | undefined;
+  inputData?: any | undefined;
+  metadata?: Record<string, any> | undefined;
+  resource?: string | undefined;
+  validationDetails?: any[] | undefined;
 }
 
 export class AppError extends Error implements ApiError {
-  statusCode: number;
-  code: string;
-  isOperational: boolean;
+  public readonly statusCode: number;
+  public readonly code: string;
+  public readonly isOperational: boolean;
+  public readonly context: ErrorContext;
+  public readonly userMessage: string;
+  public readonly timestamp: Date;
 
-  constructor(message: string, statusCode: number = 500, code: string = 'INTERNAL_ERROR') {
+  constructor(
+    message: string,
+    statusCode: number = 500,
+    code: string = 'INTERNAL_ERROR',
+    context: ErrorContext = {},
+    userMessage?: string
+  ) {
     super(message);
     this.statusCode = statusCode;
     this.code = code;
     this.isOperational = true;
+    this.context = context;
+    this.userMessage = userMessage || message;
+    this.timestamp = new Date();
 
     Error.captureStackTrace(this, this.constructor);
   }
 }
 
+// Express 5 compatible error handler with detailed debugging
 export const errorHandler = (
   err: ApiError | ZodError | Error,
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): void => {
   let statusCode = 500;
   let message = 'Internal server error';
   let code = 'INTERNAL_ERROR';
+  let userMessage = 'Something went wrong';
+  let details: any[] = [];
+  let context: ErrorContext = {};
 
-  // Zod validation errors
+  // ✅ Use correct Zod API and typings
   if (err instanceof ZodError) {
     statusCode = 400;
     code = 'VALIDATION_ERROR';
-    message = 'Validation failed';
-    
-    return res.status(statusCode).json({
-      error: {
-        code,
-        message,
-        details: err.errors.map(error => ({
-          field: error.path.join('.'),
-          message: error.message
-        }))
-      }
-    });
-  }
+    message = 'Request validation failed';
+    userMessage = 'Please check your input data';
 
-  // Custom app errors
-  if (err instanceof AppError) {
+    details = err.issues.map((issue: ZodIssue) => ({
+      field: issue.path.join('.'),
+      message: issue.message,
+      code: issue.code,
+      received: (issue as any).received,
+      expected: (issue as any).expected
+    }));
+
+    context = { operation: 'request_validation' };
+  } 
+  else if (err instanceof AppError) {
     statusCode = err.statusCode;
-    message = err.message;
     code = err.code;
+    message = err.message;
+    userMessage = err.userMessage || err.message;
+    context = err.context || {};
+  } 
+  else if ('statusCode' in err && typeof (err as ApiError).statusCode === 'number') {
+    const apiError = err as ApiError;
+    statusCode = apiError.statusCode || 500;
+    code = apiError.code || 'UNKNOWN_ERROR';
+    message = apiError.message;
+    context = apiError.context || {};
+  }
+  else if (err.name === 'JsonWebTokenError') {
+    statusCode = 401;
+    code = 'INVALID_TOKEN';
+    message = 'Invalid authentication token';
+    userMessage = 'Please sign in again';
+    context = { operation: 'jwt_verification' };
+  }
+  else if (err.name === 'TokenExpiredError') {
+    statusCode = 401;
+    code = 'TOKEN_EXPIRED';
+    message = 'Authentication token expired';
+    userMessage = 'Please sign in again';
+    context = { operation: 'jwt_verification' };
+  }
+  else if (err.message.includes('ECONNREFUSED')) {
+    statusCode = 503;
+    code = 'DATABASE_UNAVAILABLE';
+    message = 'Database connection failed';
+    userMessage = 'Service temporarily unavailable';
+    context = { operation: 'database_connection' };
   }
 
-  // Log error (in production, use proper logging service)
-  console.error(`❌ Error ${code}:`, {
-    message: err.message,
-    stack: err.stack,
+  // Enhanced error logging with explicit location information
+  const errorLocation = getErrorLocation(err);
+  const requestContext = {
     url: req.url,
     method: req.method,
     ip: req.ip,
-    timestamp: new Date().toISOString()
+    userAgent: req.get('User-Agent'),
+    referer: req.get('Referer'),
+    query: req.query,
+    params: req.params,
+    userId: (req as any).auth?.userId
+  };
+
+  console.error(`❌ ERROR ${code} [${statusCode}]`, {
+    timestamp: new Date().toISOString(),
+    location: errorLocation,
+    message: err.message,
+    stack: err.stack,
+    context: { ...context, ...requestContext },
+    details: details.length > 0 ? details : undefined,
+    errorType: err.constructor.name,
+    originalError: process.env.NODE_ENV === 'development' ? err : undefined
   });
 
-  res.status(statusCode).json({
+  // Structured error response
+  const errorResponse = {
     error: {
       code,
-      message,
+      message: userMessage,
       timestamp: new Date().toISOString(),
-      ...(process.env.NODE_ENV === 'development' && { 
-        stack: err.stack,
-        details: err.message 
+      path: req.path,
+      requestId: req.headers['x-request-id'] || generateRequestId(),
+      ...(details.length > 0 && { details }),
+      ...(process.env.NODE_ENV === 'development' && {
+        debug: {
+          technicalMessage: message,
+          location: errorLocation,
+          stack: err.stack,
+          context: { ...context, ...requestContext }
+        }
+      }),
+      ...(process.env.NODE_ENV === 'development' && err instanceof ZodError && {
+        validation: {
+          issues: err.issues
+        }
       })
     }
-  });
+  };
+
+  res.status(statusCode).json(errorResponse);
 };
 
-// Async error wrapper with proper typing
-export const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+// Helper to extract error location from stack trace
+function getErrorLocation(error: Error): string {
+  const stack = error.stack;
+  if (!stack) return 'Unknown location';
+
+  const stackLines = stack.split('\n');
+  for (let i = 1; i < stackLines.length; i++) {
+    const line = stackLines[i]?.trim();
+    if (!line) continue;
+    if (!line.includes('node_modules') && !line.includes('internal/')) {
+      const match = line.match(/at\s+.+\(?(.+):(\d+):(\d+)\)?/);
+      if (match) {
+        const [, file, line, column] = match;
+        return `${file}:${line}:${column}`;
+      }
+      return line;
+    }
+  }
+  return 'Location not found in stack';
+}
+
+// Generate unique request ID for tracing
+function generateRequestId(): string {
+  return `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+// Express 5 compatible async handler with proper typing
+export const asyncHandler = <T = any>(
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<T>
+) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
+};
+
+// Utility functions for common error scenarios
+export const ErrorUtils = {
+  notFound: (resource: string, id?: string, context?: ErrorContext) => {
+    const errorContext: ErrorContext = {
+      ...context,
+      resource,
+      resourceId: id ?? undefined
+    };
+    return new AppError(
+      `${resource}${id ? ` with ID ${id}` : ''} not found`,
+      404,
+      'RESOURCE_NOT_FOUND',
+      errorContext,
+      `${resource} not found${id ? `: ${id}` : ''}`
+    );
+  },
+
+  unauthorized: (operation: string, context?: ErrorContext) => {
+    const errorContext: ErrorContext = {
+      ...context,
+      operation
+    };
+    return new AppError(
+      `Unauthorized to perform: ${operation}`,
+      401,
+      'UNAUTHORIZED',
+      errorContext,
+      'You are not authorized to perform this action'
+    );
+  },
+
+  validation: (message: string, details?: any[], context?: ErrorContext) => {
+    const errorContext: ErrorContext = {
+      ...context,
+      validationDetails: details ?? undefined
+    };
+    return new AppError(
+      `Validation failed: ${message}`,
+      400,
+      'VALIDATION_ERROR',
+      errorContext,
+      'Please check your input and try again'
+    );
+  },
 };
 ```
 
@@ -269,8 +434,7 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
   });
 
   next();
-};
-```
+};```
 
 ### 2. Clerk Authentication Setup (3-4 hours)
 
@@ -303,23 +467,19 @@ NODE_ENV=development
 
 ~~**Root Layout with Clerk Provider** (apps/web/src/app/layout.tsx)~~
 ```typescript
-import { clerkAppearance } from '@/lib/clerk-theme';
-import { ClerkProvider } from '@clerk/nextjs';
-import { Inter } from 'next/font/google';
-import './globals.css';
+import { clerkAppearance } from '@/lib/clerk-theme'
+import { ClerkProvider, SignedIn, SignedOut } from '@clerk/nextjs'
+import { Inter } from 'next/font/google'
+import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
   title: 'StuFlux - Peer-to-Peer Rental Platform',
   description: 'Rent anything from your neighbors - cameras, tools, vehicles & more',
-};
+}
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider
       publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!}
@@ -327,13 +487,16 @@ export default function RootLayout({
     >
       <html lang="en">
         <body className={inter.className}>
-          <div className="min-h-screen bg-gray-50">
-            {children}
-          </div>
+          <SignedOut>
+            <div className="min-h-screen bg-gray-50">{children}</div>
+          </SignedOut>
+          <SignedIn>
+            <div className="min-h-screen bg-gray-50">{children}</div>
+          </SignedIn>
         </body>
       </html>
     </ClerkProvider>
-  );
+  )
 }
 ```
 
@@ -353,7 +516,7 @@ export default function SignInPage() {
             Access your rental dashboard
           </p>
         </div>
-        <SignIn />
+        <SignIn routing="hash" />
       </div>
     </div>
   );
@@ -376,7 +539,7 @@ export default function SignUpPage() {
             Start renting and earning today
           </p>
         </div>
-        <SignUp />
+        <SignUp routing="hash" />
       </div>
     </div>
   );
@@ -435,8 +598,7 @@ export async function createServerApiClient(token?: string) {
   });
 }
 
-export default apiClient;
-```
+export default apiClient;```
 
 #### Backend Clerk Authentication (apps/api)
 
@@ -575,9 +737,9 @@ export const getUserDetails = async (userId: string) => {
 ```typescript
 import { Router } from 'express';
 import { asyncHandler } from '../middleware/errors.js';
-import { testConnection } from '../db/index.js';
+import { testConnection } from '../../db/index.js';
 
-const router = Router();
+const router: Router = Router();
 
 router.get('/', asyncHandler(async (req, res) => {
   const healthCheck = {
@@ -620,7 +782,7 @@ import { z } from 'zod';
 import { requireAuth, optionalAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { asyncHandler, AppError } from '../middleware/errors.js';
 
-const router = Router();
+const router :Router = Router();
 
 // Validation schemas
 const createListingSchema = z.object({
@@ -637,7 +799,7 @@ const createListingSchema = z.object({
   delivery_available: z.boolean().default(false),
   delivery_fee: z.number().int().min(0).default(0),
   security_deposit: z.number().int().min(0).default(0),
-  specs: z.record(z.any()).default({})
+  specs: z.record(z.string(), z.any()).default({})
 });
 
 // GET /api/v1/listings - Browse listings (public)
@@ -696,7 +858,7 @@ import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errors.js';
 
-const router = Router();
+const router: Router = Router();
 
 // POST /api/v1/uploads/signature - Get Cloudinary signature (auth required)**Clerk HTTP Client for API Calls** (apps/web/src/lib/api-client.ts)
 router.post('/signature', requireAuth, asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -724,7 +886,7 @@ export default router;
 
 ### 1. Neon PostgreSQL Setup (1-2 hours)
 
-#### Create Neon Database Account
+#### ~~Create Neon Database Account~~
 1. **Go to [neon.tech](https://neon.tech)** and create account
 2. **Create new project**: 
    - Name: `stuflux-dev`
@@ -739,17 +901,17 @@ export default router;
 #### Environment Configuration
 **Update apps/web/.env.local**
 ```env
-DATABASE_URL=postgresql://username:password@ep-xyz.region.neon.tech/dbname?sslmode=require
+DATABASE_URL=psql 'postgresql://neondb_owner:npg_VwgH0bT2OmkN@ep-purple-band-adtoj94g-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
 ```
 
 **Update apps/api/.env**
 ```env
-DATABASE_URL=postgresql://username:password@ep-xyz.region.neon.tech/dbname?sslmode=require
+DATABASE_URL=psql 'postgresql://neondb_owner:npg_VwgH0bT2OmkN@ep-purple-band-adtoj94g-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
 ```
 
 ### 2. Drizzle ORM Setup (2-3 hours)
 
-#### Install Dependencies
+#### ~~Install Dependencies~~
 ```bash
 # Backend dependencies
 cd apps/api
@@ -762,99 +924,195 @@ pnpm add drizzle-orm pg
 pnpm add -D drizzle-kit @types/pg
 ```
 
-#### Create Drizzle Config
+#### ~~Create Drizzle Config~~
 Create `apps/api/drizzle.config.ts`:
 ```typescript
 import type { Config } from 'drizzle-kit';
+import 'dotenv/config';
 
 export default {
   schema: './src/db/schema.ts',
   out: './src/db/migrations',
-  driver: 'pg',
+  dialect: 'postgresql',
   dbCredentials: {
-    connectionString: process.env.DATABASE_URL!,
+    url: process.env.DATABASE_URL
   },
   verbose: true,
   strict: true,
-} satisfies Config;
-```
+} as Config;```
 
 #### Define Database Schema
 Create `apps/api/src/db/schema.ts`:
 ```typescript
-import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, serial } from 'drizzle-orm/pg-core';
+import {
+    pgTable,
+    uuid,
+    text,
+    integer,
+    boolean,
+    jsonb,
+    timestamp,
+    serial,
+} from "drizzle-orm/pg-core";
 
-export const users = pgTable('users', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  clerk_id: text('clerk_id').unique().notNull(),
-  email: text('email'),
-  name: text('name'),
-  avatar_url: text('avatar_url'),
-  city: text('city'),
-  phone: text('phone'),
-  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
-  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow()
+// ====================== USERS ======================
+export const users = pgTable("users", {
+    id: uuid("id").defaultRandom().primaryKey(), // UUID with default random generation
+    clerk_user_id: text("clerk_user_id").unique().notNull(), // Clerk-provided ID (must be unique)
+    display_name: text("display_name").notNull(), // Required display name
+    city: text("city").notNull(), // Required city
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow(), // Auto timestamp
+    updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(), // Auto timestamp
 });
 
-export const categories = pgTable('categories', {
-  id: serial('id').primaryKey(),
-  name: text('name').notNull(),
-  slug: text('slug').unique().notNull(),
-  description: text('description'),
-  icon: text('icon'),
-  created_at: timestamp('created_at', { withTimezone: true }).defaultNow()
+// ====================== USER_VERIFICATIONS ======================
+export const userVerifications = pgTable("user_verifications", {
+    id: uuid("id").defaultRandom().primaryKey(), // UUID with default random generation
+    user_id: uuid("user_id")
+        .references(() => users.id, { onDelete: "cascade" }) // Foreign key to users(id)
+        .notNull(),
+    phone_verified: boolean("phone_verified").default(false), // Defaults to false
+    verification_level: text("verification_level").default("unverified"), // Default value
 });
 
-export const listings = pgTable('listings', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  owner_id: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  title: text('title').notNull(),
-  description: text('description').notNull(),
-  category_id: integer('category_id').notNull().references(() => categories.id),
-  daily_rate: integer('daily_rate').notNull(),
-  city: text('city').notNull(),
-  address: text('address'),
-  latitude: text('latitude'),
-  longitude: text('longitude'),
-  status: text('status', { enum: ['draft', 'active', 'inactive', 'archived'] }).default('draft'),
-  specs: jsonb('specs').default({}),
-  min_rental_days: integer('min_rental_days').default(1),
-  max_rental_days: integer('max_rental_days').default(30),
-  delivery_available: boolean('delivery_available').default(false),
-  delivery_fee: integer('delivery_fee').default(0),
-  security_deposit: integer('security_deposit').default(0),
-  booking_count: integer('booking_count').default(0),
-  view_count: integer('view_count').default(0),
-  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
-  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow()
+// ====================== CATEGORIES ======================
+export const categories = pgTable("categories", {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").unique().notNull(),
+    description: text("description"),
+    icon: text("icon"),
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
+
+// ====================== LISTINGS ======================
+export const listings = pgTable("listings", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    owner_id: uuid("owner_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    category_id: integer("category_id")
+        .notNull()
+        .references(() => categories.id),
+    daily_rate: integer("daily_rate").notNull(),
+    city: text("city").notNull(),
+    address: text("address"),
+    status: text("status", {
+        enum: ["draft", "active", "inactive", "archived"],
+    }).default("draft"),
+    specs: jsonb("specs").default({}),
+    min_rental_days: integer("min_rental_days").default(1),
+    max_rental_days: integer("max_rental_days").default(30),
+    delivery_available: boolean("delivery_available").default(false),
+    delivery_fee: integer("delivery_fee").default(0),
+    security_deposit: integer("security_deposit").default(0),
+    booking_count: integer("booking_count").default(0),
+    view_count: integer("view_count").default(0),
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
 ```
 
-#### Setup Database Client
+#### ~~Setup Database Client~~
 Create `apps/api/src/db/index.ts`:
 ```typescript
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import * as schema from './schema';
+import * as schema from './schema.js';
+import { env } from '../src/configs/index.js';
+
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionString: env.DATABASE_URL, // Your Neon connection string
+  ssl: (env.NODE_ENV === 'production') ? { rejectUnauthorized: false } : true, // Neon requires SSL
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 export const db = drizzle(pool, { schema });
 
-// Test database connection
-export async function testConnection() {
+// Database connection test function
+export const testConnection = async (): Promise<boolean> => {
+  let client;
   try {
-    await db.execute(sql`SELECT NOW()`);
-    console.log('✅ Database connected successfully');
+    client = await pool.connect();
+    const result = await client.query('SELECT NOW() as current_time');
+    console.log('✅ Database connected successfully at:', result.rows[0].current_time);
     return true;
   } catch (error: any) {
-    console.error('❌ Database connection failed:', error?.message || error);
+    console.error('❌ Database connection failed:', error.message);
     return false;
+  } finally {
+    if (client) client.release();
   }
+};
+
+// Graceful shutdown handler
+export const closePool = async (): Promise<void> => {
+  try {
+    // Remove all listeners before closing
+    pool.removeAllListeners();
+    
+    // Wait for all clients to finish
+    await pool.end();
+    
+    // Optional: wait a bit to ensure all connections are properly closed
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+  } catch (error: any) {
+    console.error('❌ Error closing connection pool:', error.message);
+    throw error;
+  }
+};
+
+// Health check for the database
+export const healthCheck = async (): Promise<{ status: string; timestamp: string; error?: string }> => {
+  try {
+    await testConnection();
+    return {
+      status: 'healthy',
+      timestamp: new Date().toISOString()
+    };
+  } catch (error: any) {
+    return {
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: error.message
+    };
+  }
+};
+
+// Event listeners for connection pool
+pool.on('connect', () => {
+  if (process.env.NODE_ENV !== 'test') {
+    console.log('🔌 New database connection established');
+  }
+});
+
+pool.on('error', (err: Error) => {
+  console.error('💥 Database connection pool error:', err.message);
+});
+
+pool.on('remove', () => {
+  if (process.env.NODE_ENV !== 'test') {
+    console.log('🔌 Database connection removed from pool');
+  }
+});
+
+// Test connection on startup (optional)
+if (process.env.NODE_ENV !== 'test') {
+  testConnection().then(success => {
+    if (!success) {
+      console.warn('⚠️  Initial database connection test failed');
+    }
+  });
 }
+
+export default pool;
 ```
 
 ### 3. Migration Setup (2-3 hours)
@@ -890,17 +1148,32 @@ Create `apps/web/src/lib/db.ts`:
 ```typescript
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import * as schema from '../../api/src/db/schema';
+import * as schema from '../../../api/db/schema';
 
 // Singleton pattern for Next.js
 let db: ReturnType<typeof drizzle>;
 
 export function getDb() {
   if (!db) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL is not defined');
+    }
+
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      ssl: process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : process.env.DATABASE_URL?.includes('sslmode=require')
+        ? { rejectUnauthorized: false }
+        : false
     });
+
+    // Handle pool errors
+    pool.on('error', (err) => {
+      console.error('Unexpected error on idle client', err);
+      process.exit(-1);
+    });
+
     db = drizzle(pool, { schema });
   }
   return db;
